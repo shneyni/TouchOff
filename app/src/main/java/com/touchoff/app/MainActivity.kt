@@ -122,9 +122,16 @@ class MainActivity : Activity() {
             setOnClickListener { lockTouch(this) }
         }
 
+        val adminActive = dpm.isAdminActive(adminComponent)
         val deviceAdminBtn = Button(this).apply {
-            text = "הפעל הגנת הסרה (Device Admin, אופציונלי)"
-            setOnClickListener { requestDeviceAdmin() }
+            text = if (adminActive) "בטל הגנת הסרה (Device Admin)" else "הפעל הגנת הסרה (Device Admin, אופציונלי)"
+            setOnClickListener {
+                if (adminActive) {
+                    promptPasswordThen { removeDeviceAdmin() }
+                } else {
+                    requestDeviceAdmin()
+                }
+            }
         }
 
         val changePwdBtn = Button(this).apply {
@@ -243,10 +250,21 @@ class MainActivity : Activity() {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
             putExtra(
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                "מוסיף אישור נדרש לפני הסרת Touch Locker."
+                "מוסיף אישור נדרש לפני הסרת TouchOff."
             )
         }
         startActivity(intent)
+    }
+
+    private fun removeDeviceAdmin() {
+        if (!dpm.isAdminActive(adminComponent)) {
+            toast("הגנת הסרה כבר לא פעילה")
+            showControlPanel()
+            return
+        }
+        dpm.removeActiveAdmin(adminComponent)
+        toast("הגנת הסרה בוטלה")
+        showControlPanel()
     }
 
     // ---------- Small UI / helpers ----------
