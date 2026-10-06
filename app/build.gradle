@@ -13,8 +13,25 @@ android {
         versionName "1.0"
     }
 
-    buildTypes {
+    // One fixed keystore used for EVERY build (debug and release, local and
+    // CI). Without this, each environment signs with its own auto-generated
+    // debug key, so every new build looks like a "different app" to Android
+    // and blocks in-place updates, forcing uninstall + reinstall every time.
+    signingConfigs {
         release {
+            storeFile file("keystore/touchoff.jks")
+            storePassword "touchoff123"
+            keyAlias "touchoff"
+            keyPassword "touchoff123"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
+        release {
+            signingConfig signingConfigs.release
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
         }
