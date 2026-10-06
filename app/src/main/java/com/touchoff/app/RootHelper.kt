@@ -26,8 +26,35 @@ object RootHelper {
     data class Result(val success: Boolean, val message: String)
     data class TouchNode(val devicePath: String, val originalPerm: String)
 
+    // Apps' default PATH doesn't always include wherever Magisk/KernelSU
+    // placed `su` — try the bare command first (works if PATH does include
+    // it), then fall back to the common install locations.
+    private val suCandidates = listOf(
+        "su", "/system/bin/su", "/system/xbin/su", "/sbin/su",
+        "/data/adb/magisk/su", "/data/adb/ksu/bin/su"
+    )
+    private var resolvedSu: String? = null
+
+    private fun resolveSu(): String? {
+        resolvedSu?.let { return it }
+        for (candidate in suCandidates) {
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf(candidate, "-c", "id"))
+                val exit = process.waitFor()
+                if (exit == 0) {
+                    resolvedSu = candidate
+                    return candidate
+                }
+            } catch (e: Exception) {
+                // try next candidate
+            }
+        }
+        return null
+    }
+
     private fun runAsRoot(command: String): Triple<Int, String, String> {
-        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+        val su = resolveSu() ?: return Triple(-1, "", "su binary not found in any known location")
+        val process = Runtime.getRuntime().exec(arrayOf(su, "-c", command))
         val stdout = process.inputStream.bufferedReader().use(BufferedReader::readText)
         val stderr = process.errorStream.bufferedReader().use(BufferedReader::readText)
         val exit = process.waitFor()
@@ -35,12 +62,29 @@ object RootHelper {
     }
 
     /** Quick check whether a working root shell (su) is available at all. */
-    fun isRootAvailable(): Boolean {
+    fun isRootAvailable(): Boolean = resolveSu() != null
+
+    /**
+     * Runs `getevent -il` as root and returns the raw output, for the user
+     * to inspect when automatic touchscreen detection fails. Also reports
+     * which /dev/input/eventN (if any) was auto-detected as the touchscreen.
+     */
+    fun debugScanInputDevices(): Result {
+        val su = resolveSu() ?: return Result(false, "אין גישת Root (su לא נמצא באף מיקום ידוע).")
         return try {
-            val (exit, _, _) = runAsRoot("id")
-            exit == 0
+            val (exit, stdout, stderr) = runAsRoot("getevent -il")
+            if (exit != 0) {
+                return Result(false, "getevent נכשל (קוד $exit): $stderr")
+            }
+            val node = findTouchscreenNode()
+            val detected = if (node != null) {
+                "זוהה כמסך מגע: ${node.devicePath} (הרשאות נוכחיות: ${node.originalPerm})"
+            } else {
+                "לא זוהה אוטומטית אף מסך מגע בפלט למטה."
+            }
+            Result(true, "su בשימוש: $su\n\n$detected\n\n----- פלט getevent -il -----\n$stdout")
         } catch (e: Exception) {
-            false
+            Result(false, "שגיאה: ${e.message}")
         }
     }
 

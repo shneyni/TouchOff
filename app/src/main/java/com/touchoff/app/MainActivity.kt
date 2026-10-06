@@ -139,11 +139,43 @@ class MainActivity : Activity() {
             setOnClickListener { promptPasswordThen { showChangePasswordScreen() } }
         }
 
+        val debugBtn = Button(this).apply {
+            text = "דיבאג: סרוק מכשירי קלט"
+            setOnClickListener { runDebugScan(this) }
+        }
+
         rootLayout.addView(rootCheckBtn)
         rootLayout.addView(lockBtn)
         rootLayout.addView(deviceAdminBtn)
         rootLayout.addView(changePwdBtn)
+        rootLayout.addView(debugBtn)
         rootCheckBtn.requestFocus()
+    }
+
+    private fun runDebugScan(triggerButton: Button) {
+        triggerButton.isEnabled = false
+        triggerButton.text = "סורק..."
+        Thread {
+            val result = RootHelper.debugScanInputDevices()
+            runOnUiThread {
+                triggerButton.isEnabled = true
+                triggerButton.text = "דיבאג: סרוק מכשירי קלט"
+
+                val scrollableText = TextView(this).apply {
+                    text = result.message
+                    setPadding(30, 30, 30, 30)
+                    textIsSelectable = true
+                    textSize = 12f
+                }
+                val scrollView = android.widget.ScrollView(this).apply { addView(scrollableText) }
+
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(if (result.success) "תוצאות הסריקה" else "שגיאה")
+                    .setView(scrollView)
+                    .setPositiveButton("סגור", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun showChangePasswordScreen() {
