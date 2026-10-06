@@ -1,0 +1,57 @@
+name: Build Touch Locker APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install required Android SDK packages
+        # ubuntu-latest runners already ship with an Android SDK
+        # (ANDROID_HOME / ANDROID_SDK_ROOT preinstalled), but sdkmanager
+        # itself isn't on PATH by default — locate it explicitly and add
+        # its directory to PATH for this and later steps.
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "Using SDK root: $SDK_ROOT"
+          SDKMANAGER_BIN=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | sort -r | head -n1)
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            echo "sdkmanager not found under $SDK_ROOT/cmdline-tools"
+            find "$SDK_ROOT" -iname "sdkmanager" 2>/dev/null
+            exit 1
+          fi
+          echo "Found sdkmanager at: $SDKMANAGER_BIN"
+          echo "$(dirname "$SDKMANAGER_BIN")" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER_BIN" --licenses > /dev/null || true
+          "$SDKMANAGER_BIN" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Grant execute permission for gradlew
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.6
+          fi
+          chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: touch-locker-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
