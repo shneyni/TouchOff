@@ -164,7 +164,7 @@ class MainActivity : Activity() {
                 val scrollableText = TextView(this).apply {
                     text = result.message
                     setPadding(30, 30, 30, 30)
-                    textIsSelectable = true
+                    setTextIsSelectable(true)
                     textSize = 12f
                 }
                 val scrollView = android.widget.ScrollView(this).apply { addView(scrollableText) }
